@@ -24,6 +24,7 @@ import unlinkFile from '../../../shared/unlinkFile';
 import { downloadImage, facebookToken } from './auth.lib';
 import { verifyAppleToken } from '../../../helpers/appleHelper';
 import { prisma } from '../../../lib/prisma';
+import generateSecurePassword from '../../../util/generateSecurePassword';
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
@@ -398,9 +399,9 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
 
   if (!user) {
     // Create new user if doesn't exist
-    // Need a default password for Prisma (since password is required)
-    const dummyPassword = await bcrypt.hash(
-      uid,
+    // Use a cryptographically secure random password for social login users
+    const securePassword = await bcrypt.hash(
+      generateSecurePassword(),
       Number(config.bcrypt_salt_rounds),
     );
     user = await prisma.user.create({
@@ -411,7 +412,7 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
         googleId: uid,
         role: 'USER',
         verified: true,
-        password: dummyPassword,
+        password: securePassword,
         phone: '',
       },
     });
@@ -507,14 +508,14 @@ const facebookLogin = async (payload: { token: string }) => {
     }
 
     if (!user) {
-      const dummyPassword = await bcrypt.hash(
-        userData.id || '',
+      const securePassword = await bcrypt.hash(
+        generateSecurePassword(),
         Number(config.bcrypt_salt_rounds),
       );
       user = await prisma.user.create({
         data: {
           ...userFields,
-          password: dummyPassword,
+          password: securePassword,
           phone: '',
         },
       });
@@ -599,14 +600,14 @@ const appleLogin = async (payload: { token: string }) => {
     });
 
     if (!user) {
-      const dummyPassword = await bcrypt.hash(
-        appleData.sub || '',
+      const securePassword = await bcrypt.hash(
+        generateSecurePassword(),
         Number(config.bcrypt_salt_rounds),
       );
       user = await prisma.user.create({
         data: {
           ...userFields,
-          password: dummyPassword,
+          password: securePassword,
           phone: '',
         },
       });

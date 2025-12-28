@@ -2,6 +2,14 @@
 type PrismaWhereInput = Record<string, any>;
 type PrismaOrderBy = Record<string, 'asc' | 'desc'>;
 
+export interface PrismaQueryParams {
+  where: PrismaWhereInput;
+  orderBy: PrismaOrderBy | PrismaOrderBy[];
+  skip: number;
+  take: number;
+  select?: Record<string, boolean>;
+}
+
 class QueryBuilder {
   public where: PrismaWhereInput;
   public orderBy: PrismaOrderBy | PrismaOrderBy[];
@@ -85,7 +93,7 @@ class QueryBuilder {
     return this;
   }
 
-  build() {
+  build(): PrismaQueryParams {
     return {
       where: this.where,
       orderBy: this.orderBy,
