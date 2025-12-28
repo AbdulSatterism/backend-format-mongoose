@@ -7,12 +7,12 @@ import config from '../../config';
 import { ZodError } from 'zod';
 import { TErrorSource } from '../interface';
 import handleZodError from '../errors/handleZodError';
-import handleValidationError from '../errors/handleValidationError';
-import handleCastError from '../errors/handleCastError';
-import handleDuplicateError from '../errors/handleDuplicateError';
+import handlePrismaValidationError from '../errors/handleValidationError';
+import handlePrismaKnownError from '../errors/handleCastError';
 import AppError from '../errors/AppError';
 import { errorLogger } from '../../shared/logger';
 import chalk from 'chalk';
+import { Prisma } from '@prisma/client';
 
 const globalErrorHandler: ErrorRequestHandler = (
   err,
@@ -40,18 +40,13 @@ const globalErrorHandler: ErrorRequestHandler = (
     statusCode = simplifiedError?.statusCode;
     message = simplifiedError?.message;
     errorSources = simplifiedError?.errorSources;
-  } else if (err.name === 'ValidationError') {
-    const simplifiedError = handleValidationError(err);
+  } else if (err instanceof Prisma.PrismaClientValidationError) {
+    const simplifiedError = handlePrismaValidationError(err);
     statusCode = simplifiedError?.statusCode;
     message = simplifiedError?.message;
     errorSources = simplifiedError?.errorSources;
-  } else if (err.name === 'CastError') {
-    const simplifiedError = handleCastError(err);
-    statusCode = simplifiedError?.statusCode;
-    message = simplifiedError?.message;
-    errorSources = simplifiedError?.errorSources;
-  } else if (err.code === 11000) {
-    const simplifiedError = handleDuplicateError(err);
+  } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    const simplifiedError = handlePrismaKnownError(err);
     statusCode = simplifiedError?.statusCode;
     message = simplifiedError?.message;
     errorSources = simplifiedError?.errorSources;

@@ -8,14 +8,34 @@ import { emailHelper } from '../../../helpers/emailHelper';
 import { emailTemplate } from '../../../shared/emailTemplate';
 import generateOTP from '../../../util/generateOTP';
 
-import { IUser } from './user.interface';
-import { User } from './user.model';
+import { IUserCreate, IUserUpdate } from './user.interface';
+import { UserHelpers } from './user.model';
 import unlinkFile from '../../../shared/unlinkFile';
 import AppError from '../../errors/AppError';
+import { prisma } from '../../../lib/prisma';
+import bcrypt from 'bcrypt';
+import config from '../../../config';
 
-const createUserFromDb = async (payload: IUser) => {
-  payload.role = USER_ROLES.USER;
-  const result = await User.create(payload);
+const createUserFromDb = async (payload: IUserCreate) => {
+  // Check if user exists
+  const existingUser = await UserHelpers.isExistUserByEmail(payload.email);
+  if (existingUser) {
+    throw new AppError(StatusCodes.BAD_REQUEST, 'Email already used');
+  }
+
+  // Hash password
+  const hashedPassword = await bcrypt.hash(
+    payload.password,
+    Number(config.bcrypt_salt_rounds),
+  );
+
+  const result = await prisma.user.create({
+    data: {
+      ...payload,
+      password: hashedPassword,
+      role: USER_ROLES.USER,
+    },
+  });
 
   if (!result) {
     throw new AppError(StatusCodes.BAD_REQUEST, 'Failed to create user');
@@ -32,14 +52,14 @@ const createUserFromDb = async (payload: IUser) => {
   emailHelper.sendEmail(accountEmailTemplate);
 
   // Update user with authentication details
-  const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 20 * 60000),
-  };
-  const updatedUser = await User.findOneAndUpdate(
-    { _id: result._id },
-    { $set: { authentication } },
-  );
+  const updatedUser = await prisma.user.update({
+    where: { id: result.id },
+    data: {
+      authOneTimeCode: otp,
+      authExpireAt: new Date(Date.now() + 20 * 60000),
+    },
+  });
+
   if (!updatedUser) {
     throw new AppError(StatusCodes.NOT_FOUND, 'User not found for update');
   }
@@ -54,8 +74,12 @@ const getAllUsers = async (query: Record<string, unknown>) => {
   const skip = (pages - 1) * size;
 
   const [result, total] = await Promise.all([
-    User.find().sort({ createdAt: -1 }).skip(skip).limit(size).lean(),
-    User.countDocuments(),
+    prisma.user.findMany({
+      skip,
+      take: size,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.user.count(),
   ]);
 
   const totalPage = Math.ceil(total / size);
@@ -71,11 +95,12 @@ const getAllUsers = async (query: Record<string, unknown>) => {
   };
 };
 
-const getUserProfileFromDB = async (
-  user: JwtPayload,
-): Promise<Partial<IUser>> => {
+const getUserProfileFromDB = async (user: JwtPayload) => {
   const { id } = user;
-  const isExistUser = await User.findById(id);
+  const isExistUser = await prisma.user.findUnique({
+    where: { id },
+  });
+
   if (!isExistUser) {
     throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
@@ -85,17 +110,13 @@ const getUserProfileFromDB = async (
 
 const updateProfileToDB = async (
   user: JwtPayload,
-  payload: Partial<IUser>,
-): Promise<Partial<IUser | null>> => {
+  payload: IUserUpdate,
+) => {
   const { id } = user;
-  const isExistUser = await User.isExistUserById(id);
+  const isExistUser = await UserHelpers.isExistUserById(id);
 
   if (!isExistUser) {
     throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
-  }
-
-  if (!isExistUser) {
-    throw new AppError(StatusCodes.NOT_FOUND, 'Blog not found');
   }
 
   if (!isExistUser.verified) {
@@ -109,15 +130,18 @@ const updateProfileToDB = async (
     unlinkFile(isExistUser.image);
   }
 
-  const updateDoc = await User.findOneAndUpdate({ _id: id }, payload, {
-    new: true,
+  const updateDoc = await prisma.user.update({
+    where: { id },
+    data: payload,
   });
 
   return updateDoc;
 };
 
-const getSingleUser = async (id: string): Promise<IUser | null> => {
-  const result = await User.findById(id);
+const getSingleUser = async (id: string) => {
+  const result = await prisma.user.findUnique({
+    where: { id },
+  });
   return result;
 };
 
@@ -126,12 +150,26 @@ const searchUserByPhone = async (searchTerm: string, userId: string) => {
   let result;
 
   if (searchTerm) {
-    result = await User.find({
-      phone: { $regex: searchTerm, $options: 'i' },
-      _id: { $ne: userId },
+    result = await prisma.user.findMany({
+      where: {
+        phone: {
+          contains: searchTerm,
+          mode: 'insensitive',
+        },
+        id: {
+          not: userId,
+        },
+      },
     });
   } else {
-    result = await User.find({ _id: { $ne: userId } }).limit(10);
+    result = await prisma.user.findMany({
+      where: {
+        id: {
+          not: userId,
+        },
+      },
+      take: 10,
+    });
   }
 
   return result;

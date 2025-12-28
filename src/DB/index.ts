@@ -1,8 +1,9 @@
 import chalk from 'chalk';
-import { User } from '../app/modules/user/user.model';
 import config from '../config';
 import { USER_ROLES } from '../enums/user';
 import { logger } from '../shared/logger';
+import { prisma } from '../lib/prisma';
+import bcrypt from 'bcrypt';
 
 const superUser = {
   name: 'starter backend',
@@ -16,10 +17,21 @@ const superUser = {
 
 const seedAdmin = async () => {
   try {
-    const isExistSuperAdmin = await User.findOne({ role: USER_ROLES.ADMIN });
+    const isExistSuperAdmin = await prisma.user.findFirst({
+      where: { role: USER_ROLES.ADMIN },
+    });
 
     if (!isExistSuperAdmin) {
-      await User.create(superUser);
+      const hashedPassword = await bcrypt.hash(
+        superUser.password,
+        Number(config.bcrypt_salt_rounds),
+      );
+      await prisma.user.create({
+        data: {
+          ...superUser,
+          password: hashedPassword,
+        },
+      });
       logger.info(chalk.green('✔ admin created successfully!'));
     } else {
       console.log('Admin already exists.');

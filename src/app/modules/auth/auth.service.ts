@@ -17,17 +17,20 @@ import {
 // import cryptoToken from '../../../util/cryptoToken';
 import generateOTP from '../../../util/generateOTP';
 
-import { User } from '../user/user.model';
-import { ResetToken } from '../resetToken/resetToken.model';
+import { UserHelpers } from '../user/user.model';
+import { ResetTokenHelpers } from '../resetToken/resetToken.model';
 import AppError from '../../errors/AppError';
 import unlinkFile from '../../../shared/unlinkFile';
 import { downloadImage, facebookToken } from './auth.lib';
 import { verifyAppleToken } from '../../../helpers/appleHelper';
+import { prisma } from '../../../lib/prisma';
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
   const { email, password } = payload;
-  const isExistUser = await User.findOne({ email }).select('+password');
+  const isExistUser = await prisma.user.findUnique({
+    where: { email },
+  });
   if (!isExistUser) {
     throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
@@ -43,13 +46,13 @@ const loginUserFromDB = async (payload: ILoginData) => {
   //check match password
   if (
     password &&
-    !(await User.isMatchPassword(password, isExistUser.password))
+    !(await UserHelpers.isMatchPassword(password, isExistUser.password))
   ) {
     throw new AppError(StatusCodes.BAD_REQUEST, 'Password is incorrect!');
   }
 
   const tokenPayload = {
-    id: isExistUser._id,
+    id: isExistUser.id,
     role: isExistUser.role,
     email: isExistUser.email,
   };
@@ -69,14 +72,14 @@ const loginUserFromDB = async (payload: ILoginData) => {
   );
 
   // send user data without password
-  const { password: _, ...userWithoutPassword } = isExistUser.toObject();
+  const { password: _, ...userWithoutPassword } = isExistUser;
 
   return { user: userWithoutPassword, accessToken, refreshToken };
 };
 
 //forget password
 const forgetPasswordToDB = async (email: string) => {
-  const isExistUser = await User.isExistUserByEmail(email);
+  const isExistUser = await UserHelpers.isExistUserByEmail(email);
   if (!isExistUser) {
     throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
@@ -91,17 +94,21 @@ const forgetPasswordToDB = async (email: string) => {
   emailHelper.sendEmail(forgetPassword);
 
   //save to DB
-  const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 20 * 60000),
-  };
-  await User.findOneAndUpdate({ email }, { $set: { authentication } });
+  await prisma.user.update({
+    where: { email },
+    data: {
+      authOneTimeCode: otp,
+      authExpireAt: new Date(Date.now() + 20 * 60000),
+    },
+  });
 };
 
 const verifyEmailToDB = async (payload: IVerifyEmail) => {
   const { email, oneTimeCode } = payload;
 
-  const isExistUser = await User.findOne({ email }).select('+authentication');
+  const isExistUser = await prisma.user.findUnique({
+    where: { email },
+  });
   if (!isExistUser) {
     throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
@@ -113,13 +120,13 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
     );
   }
 
-  // console.log(isExistUser.authentication?.oneTimeCode, { payload });
-  if (isExistUser.authentication?.oneTimeCode !== oneTimeCode) {
+  // console.log(isExistUser.authOneTimeCode, { payload });
+  if (isExistUser.authOneTimeCode !== oneTimeCode) {
     throw new AppError(StatusCodes.BAD_REQUEST, 'You provided wrong otp');
   }
 
   const date = new Date();
-  if (date > isExistUser.authentication?.expireAt) {
+  if (isExistUser.authExpireAt && date > isExistUser.authExpireAt) {
     throw new AppError(
       StatusCodes.BAD_REQUEST,
       'Otp already expired, Please try again',
@@ -127,7 +134,7 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
   }
 
   const tokenPayload = {
-    id: isExistUser._id,
+    id: isExistUser.id,
     role: isExistUser.role,
     email: isExistUser.email,
   };
@@ -150,29 +157,33 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
   let data;
 
   if (!isExistUser.verified) {
-    await User.findOneAndUpdate(
-      { _id: isExistUser._id },
-      { verified: true, authentication: { oneTimeCode: null, expireAt: null } },
-    );
+    await prisma.user.update({
+      where: { id: isExistUser.id },
+      data: {
+        verified: true,
+        authOneTimeCode: null,
+        authExpireAt: null,
+      },
+    });
     message = 'Your email has been successfully verified.';
     data = { user: isExistUser, accessToken, refreshToken };
   } else {
-    await User.findOneAndUpdate(
-      { _id: isExistUser._id },
-      {
-        authentication: {
-          isResetPassword: true,
-          oneTimeCode: null,
-          expireAt: null,
-        },
+    await prisma.user.update({
+      where: { id: isExistUser.id },
+      data: {
+        authIsResetPassword: true,
+        authOneTimeCode: null,
+        authExpireAt: null,
       },
-    );
+    });
 
     // const createToken = cryptoToken();
-    await ResetToken.create({
-      user: isExistUser._id,
-      token: accessToken,
-      expireAt: new Date(Date.now() + 20 * 60000),
+    await prisma.resetToken.create({
+      data: {
+        userId: isExistUser.id,
+        token: accessToken,
+        expireAt: new Date(Date.now() + 20 * 60000),
+      },
     });
     message = 'Verification Successful';
     data = { user: isExistUser, accessToken, refreshToken };
@@ -188,17 +199,17 @@ const resetPasswordToDB = async (
   const { newPassword, confirmPassword } = payload;
 
   //isExist token
-  const isExistToken = await ResetToken.isExistToken(token);
+  const isExistToken = await ResetTokenHelpers.isExistToken(token);
 
   if (!isExistToken) {
     throw new AppError(StatusCodes.UNAUTHORIZED, 'You are not authorized');
   }
 
   //user permission check
-  const isExistUser = await User.findById(isExistToken.user).select(
-    '+authentication',
-  );
-  if (!isExistUser?.authentication?.isResetPassword) {
+  const isExistUser = await prisma.user.findUnique({
+    where: { id: isExistToken.userId },
+  });
+  if (!isExistUser?.authIsResetPassword) {
     throw new AppError(
       StatusCodes.UNAUTHORIZED,
       "You don't have permission to change the password. Please click again to 'Forgot Password'",
@@ -206,7 +217,7 @@ const resetPasswordToDB = async (
   }
 
   //validity check
-  const isValid = await ResetToken.isExpireToken(token);
+  const isValid = await ResetTokenHelpers.isExpireToken(token);
   if (!isValid) {
     throw new AppError(
       StatusCodes.BAD_REQUEST,
@@ -227,15 +238,12 @@ const resetPasswordToDB = async (
     Number(config.bcrypt_salt_rounds),
   );
 
-  const updateData = {
-    password: hashPassword,
-    authentication: {
-      isResetPassword: false,
+  await prisma.user.update({
+    where: { id: isExistToken.userId },
+    data: {
+      password: hashPassword,
+      authIsResetPassword: false,
     },
-  };
-
-  await User.findOneAndUpdate({ _id: isExistToken.user }, updateData, {
-    new: true,
   });
 };
 
@@ -245,7 +253,9 @@ const changePasswordToDB = async (
 ) => {
   const { currentPassword, newPassword, confirmPassword } = payload;
 
-  const isExistUser = await User.findById(user.id).select('+password');
+  const isExistUser = await prisma.user.findUnique({
+    where: { id: user.id },
+  });
   if (!isExistUser) {
     throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
@@ -253,7 +263,7 @@ const changePasswordToDB = async (
   //current password match
   if (
     currentPassword &&
-    !(await User.isMatchPassword(currentPassword, isExistUser.password))
+    !(await UserHelpers.isMatchPassword(currentPassword, isExistUser.password))
   ) {
     throw new AppError(StatusCodes.BAD_REQUEST, 'Password is incorrect');
   }
@@ -279,14 +289,16 @@ const changePasswordToDB = async (
     Number(config.bcrypt_salt_rounds),
   );
 
-  const updateData = {
-    password: hashPassword,
-  };
-  await User.findOneAndUpdate({ _id: user.id }, updateData, { new: true });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: hashPassword },
+  });
 };
 
 const deleteAccountToDB = async (user: JwtPayload) => {
-  const result = await User.findByIdAndDelete(user?.id);
+  const result = await prisma.user.delete({
+    where: { id: user?.id },
+  });
   if (!result) {
     throw new AppError(StatusCodes.NOT_FOUND, 'No User found');
   }
@@ -305,14 +317,16 @@ const newAccessTokenToUser = async (token: string) => {
     config.jwt.jwtRefreshSecret as Secret,
   );
 
-  const isExistUser = await User.findById(verifyUser?.id);
+  const isExistUser = await prisma.user.findUnique({
+    where: { id: verifyUser?.id },
+  });
   if (!isExistUser) {
     throw new AppError(StatusCodes.UNAUTHORIZED, 'Unauthorized access');
   }
 
   //create token
   const accessToken = jwtHelper.createToken(
-    { id: isExistUser._id, role: isExistUser.role, email: isExistUser.email },
+    { id: isExistUser.id, role: isExistUser.role, email: isExistUser.email },
     config.jwt.jwt_secret as Secret,
     config.jwt.jwt_expire_in as string,
   );
@@ -322,7 +336,9 @@ const newAccessTokenToUser = async (token: string) => {
 
 const resendVerificationEmailToDB = async (email: string) => {
   // Find the user by ID
-  const existingUser: any = await User.findOne({ email: email }).lean();
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
 
   if (!existingUser) {
     throw new AppError(
@@ -331,7 +347,7 @@ const resendVerificationEmailToDB = async (email: string) => {
     );
   }
 
-  if (existingUser?.isVerified) {
+  if (existingUser?.verified) {
     throw new AppError(StatusCodes.BAD_REQUEST, 'User is already verified!');
   }
 
@@ -346,16 +362,13 @@ const resendVerificationEmailToDB = async (email: string) => {
   emailHelper.sendEmail(accountEmailTemplate);
 
   // Update user with authentication details
-  const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 20 * 60000),
-  };
-
-  await User.findOneAndUpdate(
-    { email: email },
-    { $set: { authentication } },
-    { new: true },
-  );
+  await prisma.user.update({
+    where: { email },
+    data: {
+      authOneTimeCode: otp,
+      authExpireAt: new Date(Date.now() + 20 * 60000),
+    },
+  });
 };
 
 //! login with google
@@ -375,7 +388,9 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
   }
 
   // Check if user exists by email
-  let user = await User.findOne({ email });
+  let user = await prisma.user.findUnique({
+    where: { email },
+  });
 
   if (user?.image && image) {
     unlinkFile(user?.image);
@@ -383,25 +398,33 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
 
   if (!user) {
     // Create new user if doesn't exist
-    user = await User.create({
-      email,
-      name,
-      image: image || '',
-      googleId: uid,
-      role: 'USER',
-      verified: true, // Google accounts are pre-verified
+    // Need a default password for Prisma (since password is required)
+    const dummyPassword = await bcrypt.hash(
+      uid,
+      Number(config.bcrypt_salt_rounds),
+    );
+    user = await prisma.user.create({
+      data: {
+        email,
+        name,
+        image: image || '/default/user.jpg',
+        googleId: uid,
+        role: 'USER',
+        verified: true,
+        password: dummyPassword,
+        phone: '',
+      },
     });
   } else if (!user.googleId) {
     // Update existing user with Google ID if they haven't logged in with Google before
-    user = await User.findByIdAndUpdate(
-      user._id,
-      {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: {
         googleId: uid,
         verified: true,
-        image: image || user.image, // Keep existing image if no new image provided
+        image: image || user.image,
       },
-      { new: true },
-    );
+    });
   }
 
   if (!user) {
@@ -413,7 +436,7 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
 
   // Generate tokens for authentication
   const tokenPayload = {
-    id: user._id,
+    id: user.id,
     email: user.email,
     role: user.role,
   };
@@ -431,9 +454,7 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
   );
 
   // Remove sensitive data before sending response
-  const userObject: any = user.toObject();
-  delete userObject.password;
-  delete userObject.authentication;
+  const { password, ...userObject } = user;
 
   return {
     user: userObject,
@@ -469,14 +490,16 @@ const facebookLogin = async (payload: { token: string }) => {
     const userFields = {
       name: userData.name || '',
       email: userData.email,
-      image: localImage || '',
+      image: localImage || '/default/user.jpg',
       facebookId: userData.id,
       role: 'USER' as const,
       verified: true,
     };
 
-    let user = await User.findOne({
-      $or: [{ email: userData.email }, { facebookId: userData.id }],
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: userData.email }, { facebookId: userData.id }],
+      },
     });
 
     if (user?.image && localImage) {
@@ -484,17 +507,26 @@ const facebookLogin = async (payload: { token: string }) => {
     }
 
     if (!user) {
-      user = await User.create(userFields);
+      const dummyPassword = await bcrypt.hash(
+        userData.id || '',
+        Number(config.bcrypt_salt_rounds),
+      );
+      user = await prisma.user.create({
+        data: {
+          ...userFields,
+          password: dummyPassword,
+          phone: '',
+        },
+      });
     } else if (!user.facebookId) {
-      user = await User.findByIdAndUpdate(
-        user._id,
-        {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
           ...userFields,
           image: userFields.image || user.image,
           name: userFields.name || user.name,
         },
-        { new: true },
-      );
+      });
     }
 
     if (!user) {
@@ -505,7 +537,7 @@ const facebookLogin = async (payload: { token: string }) => {
     }
 
     const tokenPayload = {
-      id: user._id,
+      id: user.id,
       email: user.email,
       role: user.role,
     };
@@ -523,7 +555,7 @@ const facebookLogin = async (payload: { token: string }) => {
       ),
     ]);
 
-    const { password, authentication, ...userObject } = user.toObject();
+    const { password, ...userObject } = user;
 
     return { user: userObject, accessToken, refreshToken };
   } catch (error) {
@@ -560,18 +592,32 @@ const appleLogin = async (payload: { token: string }) => {
     };
 
     // Step 3 — Find or create user
-    let user = await User.findOne({
-      $or: [{ email: appleData.email }, { appleId: appleData.sub }],
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: appleData.email }, { appleId: appleData.sub }],
+      },
     });
 
     if (!user) {
-      user = await User.create(userFields);
-    } else if (!user.appleId) {
-      user = await User.findByIdAndUpdate(
-        user._id,
-        { ...userFields, name: userFields.name || user.name },
-        { new: true },
+      const dummyPassword = await bcrypt.hash(
+        appleData.sub || '',
+        Number(config.bcrypt_salt_rounds),
       );
+      user = await prisma.user.create({
+        data: {
+          ...userFields,
+          password: dummyPassword,
+          phone: '',
+        },
+      });
+    } else if (!user.appleId) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          ...userFields,
+          name: userFields.name || user.name,
+        },
+      });
     }
 
     if (!user) {
@@ -583,7 +629,7 @@ const appleLogin = async (payload: { token: string }) => {
 
     // Step 4 — Generate access & refresh tokens
     const tokenPayload = {
-      id: user._id,
+      id: user.id,
       email: user.email,
       role: user.role,
     };
@@ -602,7 +648,7 @@ const appleLogin = async (payload: { token: string }) => {
     ]);
 
     // Step 5 — Prepare response
-    const { password, authentication, ...userObject } = user.toObject();
+    const { password, ...userObject } = user;
     return { user: userObject, accessToken, refreshToken };
   } catch (error) {
     if (error instanceof AppError) throw error;
