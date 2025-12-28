@@ -2,13 +2,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-undef */
 import chalk from 'chalk';
-import mongoose from 'mongoose';
 import { Server } from 'socket.io';
 import app from './app';
 import config from './config';
 import { socketHelper } from './helpers/socketHelper';
 import { errorLogger, logger } from './shared/logger';
 import seedAdmin from './DB';
+import { prisma } from './lib/prisma';
 
 //uncaught exception
 process.on('uncaughtException', error => {
@@ -19,7 +19,8 @@ process.on('uncaughtException', error => {
 let server: any;
 async function main() {
   try {
-    await mongoose.connect(config.database_url as string);
+    // Test database connection
+    await prisma.$connect();
     logger.info(chalk.green('🚀 Database connected successfully'));
 
     const port =
@@ -50,8 +51,9 @@ async function main() {
   //handle unhandleRejection
   process.on('unhandledRejection', error => {
     if (server) {
-      server.close(() => {
+      server.close(async () => {
         errorLogger.error('UnhandleRejection Detected', error);
+        await prisma.$disconnect();
         process.exit(1);
       });
     } else {
@@ -63,9 +65,10 @@ async function main() {
 main();
 
 //SIGTERM
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   logger.info('SIGTERM IS RECEIVE');
   if (server) {
     server.close();
   }
+  await prisma.$disconnect();
 });

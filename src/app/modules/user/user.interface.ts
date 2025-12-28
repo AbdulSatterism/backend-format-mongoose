@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-unused-vars */
-import { Model } from 'mongoose';
+import { User as PrismaUser } from '@prisma/client';
 
-export type IUser = {
+export type IUser = PrismaUser;
+
+export type IUserCreate = {
   name: string;
   email: string;
   phone: string;
@@ -17,25 +19,10 @@ export type IUser = {
   payment?: boolean;
   subscription?: boolean;
   isDeleted?: boolean;
-  authentication?: {
-    isResetPassword: boolean;
-    oneTimeCode: number;
-    expireAt: Date;
-  };
-  verified: boolean;
+  verified?: boolean;
+  authIsResetPassword?: boolean;
+  authOneTimeCode?: number;
+  authExpireAt?: Date;
 };
 
-export type UserModal = {
-  isExistUserById(id: string): any;
-  isExistUserByEmail(email: string): any;
-  isAccountCreated(id: string): any;
-  isMatchPassword(password: string, hashPassword: string): boolean;
-} & Model<IUser>;
-
-/*
-  authentication?: {
-    isResetPassword: boolean;
-    oneTimeCode: number;
-    expireAt: Date;
-  };
-  */
+export type IUserUpdate = Partial<IUserCreate>;

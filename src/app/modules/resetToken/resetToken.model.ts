@@ -1,42 +1,23 @@
-import { model, Schema } from 'mongoose';
-import { IResetToken, ResetTokenModel } from './resetToken.interface';
+import { prisma } from '../../../lib/prisma';
+import { IResetToken } from './resetToken.interface';
 
-const resetTokenSchema = new Schema<IResetToken, ResetTokenModel>(
-  {
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-    },
-    token: {
-      type: String,
-      required: true,
-    },
-    expireAt: {
-      type: Date,
-      required: true,
-    },
+export const ResetTokenHelpers = {
+  //token check
+  isExistToken: async (token: string): Promise<IResetToken | null> => {
+    return await prisma.resetToken.findFirst({ where: { token } });
   },
-  { timestamps: true },
-);
 
-//token check
-resetTokenSchema.statics.isExistToken = async (
-  token: string,
-): Promise<IResetToken | null> => {
-  return await ResetToken.findOne({ token });
+  //token validity check
+  isExpireToken: async (token: string): Promise<boolean> => {
+    const currentDate = new Date();
+    const resetToken = await prisma.resetToken.findFirst({
+      where: {
+        token,
+        expireAt: {
+          gt: currentDate,
+        },
+      },
+    });
+    return !!resetToken;
+  },
 };
-
-//token validity check
-resetTokenSchema.statics.isExpireToken = async (token: string) => {
-  const currentDate = new Date();
-  const resetToken = await ResetToken.findOne({
-    token,
-    expireAt: { $gt: currentDate },
-  });
-  return !!resetToken;
-};
-
-export const ResetToken = model<IResetToken, ResetTokenModel>(
-  'Token',
-  resetTokenSchema,
-);
