@@ -2,14 +2,14 @@ import { Response } from 'express';
 
 type IData<T> = {
   success: boolean;
-  statusCode: number;
+  status_code: number;
   message?: string;
-  paymentIntent?: string | undefined;
+  payment_intent?: string | undefined;
   meta?: {
     page: number;
     limit: number;
-    totalPage: number;
-    total: number;
+    total_data_page: number;
+    total_data: number;
   };
   data?: T;
 };
@@ -19,10 +19,10 @@ const sendResponse = <T>(res: Response, data: IData<T>) => {
     success: data.success,
     message: data.message,
     meta: data.meta,
-    paymentIntent: data.paymentIntent,
+    payment_intent: data.payment_intent,
     data: data.data,
   };
-  res.status(data.statusCode).json(resData);
+  res.status(data.status_code).json(resData);
 };
 
 export default sendResponse;

@@ -22,10 +22,10 @@ const seedAdmin = async () => {
       await User.create(superUser);
       logger.info(chalk.green('✔ admin created successfully!'));
     } else {
-      console.log('Admin already exists.');
+      logger.info(chalk.green('⚠ admin already exists!'));
     }
   } catch (error) {
-    console.error('Error creating admin:', error);
+    logger.error(chalk.red('Error creating admin:'), error);
   }
 };
 

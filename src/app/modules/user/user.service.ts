@@ -1,7 +1,7 @@
 /* eslint-disable no-undef */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-unused-vars */
-import { StatusCodes } from 'http-status-codes';
+import statusCodes from 'http-status-codes';
 import { JwtPayload } from 'jsonwebtoken';
 import { USER_ROLES } from '../../../enums/user';
 import { emailHelper } from '../../../helpers/emailHelper';
@@ -18,12 +18,12 @@ const createUserFromDb = async (payload: IUser) => {
   const result = await User.create(payload);
 
   if (!result) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Failed to create user');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Failed to create user');
   }
 
   const otp = generateOTP();
   const emailValues = {
-    name: result.name,
+    name: result.name || 'User',
     otp,
     email: result.email,
   };
@@ -33,15 +33,15 @@ const createUserFromDb = async (payload: IUser) => {
 
   // Update user with authentication details
   const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 20 * 60000),
+    one_time_code: otp,
+    expire_at: new Date(Date.now() + 20 * 60000),
   };
   const updatedUser = await User.findOneAndUpdate(
     { _id: result._id },
     { $set: { authentication } },
   );
   if (!updatedUser) {
-    throw new AppError(StatusCodes.NOT_FOUND, 'User not found for update');
+    throw new AppError(statusCodes.NOT_FOUND, 'User not found for update');
   }
 
   return result;
@@ -53,20 +53,20 @@ const getAllUsers = async (query: Record<string, unknown>) => {
   const size = parseInt(limit as string) || 10;
   const skip = (pages - 1) * size;
 
-  const [result, total] = await Promise.all([
-    User.find().sort({ createdAt: -1 }).skip(skip).limit(size).lean(),
+  const [result, total_data] = await Promise.all([
+    User.find().sort({ created_at: -1 }).skip(skip).limit(size).lean(),
     User.countDocuments(),
   ]);
 
-  const totalPage = Math.ceil(total / size);
+  const total_data_page = Math.ceil(total_data / size);
 
   return {
     data: result,
     meta: {
       page: pages,
       limit: size,
-      totalPage,
-      total,
+      total_data_page,
+      total_data,
     },
   };
 };
@@ -77,7 +77,7 @@ const getUserProfileFromDB = async (
   const { id } = user;
   const isExistUser = await User.findById(id);
   if (!isExistUser) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+    throw new AppError(statusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
   return isExistUser;
@@ -91,16 +91,23 @@ const updateProfileToDB = async (
   const isExistUser = await User.isExistUserById(id);
 
   if (!isExistUser) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+    throw new AppError(statusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
   if (!isExistUser) {
-    throw new AppError(StatusCodes.NOT_FOUND, 'Blog not found');
+    throw new AppError(statusCodes.NOT_FOUND, 'Blog not found');
+  }
+
+  if (isExistUser.is_deleted) {
+    throw new AppError(
+      statusCodes.BAD_REQUEST,
+      'Your account has been deleted',
+    );
   }
 
   if (!isExistUser.verified) {
     throw new AppError(
-      StatusCodes.BAD_REQUEST,
+      statusCodes.BAD_REQUEST,
       'Please verify your account first',
     );
   }

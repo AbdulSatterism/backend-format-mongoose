@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextFunction, Request, Response } from 'express';
-import { StatusCodes } from 'http-status-codes';
+import statusCodes from 'http-status-codes';
 import { Secret } from 'jsonwebtoken';
 import config from '../../config';
 import { jwtHelper } from '../../helpers/jwtHelper';
 import AppError from '../errors/AppError';
-
 
 const auth = (...roles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -12,7 +12,7 @@ const auth = (...roles: string[]) => {
       // Extracting token from authorization header
       const tokenWithBearer = req.headers.authorization;
       if (!tokenWithBearer || !tokenWithBearer.startsWith('Bearer ')) {
-        throw new AppError(StatusCodes.UNAUTHORIZED, 'You are not authorized');
+        throw new AppError(statusCodes.UNAUTHORIZED, 'You are not authorized');
       }
 
       // Get the token
@@ -27,7 +27,7 @@ const auth = (...roles: string[]) => {
         );
       } catch (error) {
         if ((error as any).name === 'TokenExpiredError') {
-          throw new AppError(StatusCodes.UNAUTHORIZED, 'Token has expired');
+          throw new AppError(statusCodes.UNAUTHORIZED, 'Token has expired');
         }
         throw error;
       }
@@ -36,7 +36,7 @@ const auth = (...roles: string[]) => {
 
       if (roles.length && !roles.includes(decodedUser.role)) {
         throw new AppError(
-          StatusCodes.FORBIDDEN,
+          statusCodes.FORBIDDEN,
           "You don't have permission to access this API",
         );
       }

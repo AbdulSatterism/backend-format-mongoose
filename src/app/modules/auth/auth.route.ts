@@ -12,7 +12,7 @@ router.post(
   AuthController.loginUser,
 );
 
-router.post('/refresh-token', AuthController.newAccessToken);
+router.post('/refresh-token', AuthController.newaccess_token);
 
 router.post(
   '/forgot-password',
@@ -34,17 +34,23 @@ router.post(
   AuthController.resetPassword,
 );
 
-// router.delete(
-//   '/delete-account',
-//   auth(USER_ROLES.USER),
-//   AuthController.deleteAccount
-// );
+router.delete(
+  '/delete-account',
+  auth(USER_ROLES.USER),
+  AuthController.deleteAccount,
+);
 
 router.post(
   '/change-password',
   auth(USER_ROLES.ADMIN, USER_ROLES.USER),
   validateRequest(AuthValidation.createChangePasswordZodSchema),
   AuthController.changePassword,
+);
+
+router.post(
+  '/access-token',
+  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  AuthController.accessToken,
 );
 
 router.post('/google-login', AuthController.googleLogin);

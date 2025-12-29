@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-undef */
 import type { Express } from 'express';
-import { StatusCodes } from 'http-status-codes';
+import statusCodes from 'http-status-codes';
 import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
@@ -98,7 +98,7 @@ export const fileRetriever = catchAsync(async (req, res) => {
     await fs.access(filePath); // ✅ Check file exists
     res.sendFile(filePath);
   } catch {
-    throw new AppError(StatusCodes.NOT_FOUND, 'File not found');
+    throw new AppError(statusCodes.NOT_FOUND, 'File not found');
   }
 });
 
@@ -167,7 +167,7 @@ const fileFilter =
 
     cb(
       new AppError(
-        StatusCodes.BAD_REQUEST,
+        statusCodes.BAD_REQUEST,
         `${file.originalname} is not a valid ${fileType} file`,
       ),
     );

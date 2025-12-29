@@ -25,7 +25,7 @@ const globalErrorHandler: ErrorRequestHandler = (
     ? errorLogger.error(chalk.red('🚨 globalErrorHandler ~~ ', err))
     : errorLogger.error(chalk.red('🚨 globalErrorHandler ~~ ', err));
 
-  let statusCode = 500;
+  let status_code = 500;
   let message = 'something went wrong';
 
   let errorSources: TErrorSource = [
@@ -37,26 +37,26 @@ const globalErrorHandler: ErrorRequestHandler = (
 
   if (err instanceof ZodError) {
     const simplifiedError = handleZodError(err);
-    statusCode = simplifiedError?.statusCode;
+    status_code = simplifiedError?.status_code;
     message = simplifiedError?.message;
     errorSources = simplifiedError?.errorSources;
   } else if (err.name === 'ValidationError') {
     const simplifiedError = handleValidationError(err);
-    statusCode = simplifiedError?.statusCode;
+    status_code = simplifiedError?.status_code;
     message = simplifiedError?.message;
     errorSources = simplifiedError?.errorSources;
   } else if (err.name === 'CastError') {
     const simplifiedError = handleCastError(err);
-    statusCode = simplifiedError?.statusCode;
+    status_code = simplifiedError?.status_code;
     message = simplifiedError?.message;
     errorSources = simplifiedError?.errorSources;
   } else if (err.code === 11000) {
     const simplifiedError = handleDuplicateError(err);
-    statusCode = simplifiedError?.statusCode;
+    status_code = simplifiedError?.status_code;
     message = simplifiedError?.message;
     errorSources = simplifiedError?.errorSources;
   } else if (err instanceof AppError) {
-    statusCode = err?.statusCode;
+    status_code = err?.status_code;
     message = err?.message;
     errorSources = [
       {
@@ -74,7 +74,7 @@ const globalErrorHandler: ErrorRequestHandler = (
     ];
   }
 
-  return res.status(statusCode).json({
+  return res.status(status_code).json({
     success: false,
     message,
     errorSources,

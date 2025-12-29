@@ -3,24 +3,20 @@
 import { Model } from 'mongoose';
 
 export type IUser = {
-  name: string;
+  name?: string;
   email: string;
-  phone: string;
   password: string;
-  googleId?: string;
-  facebookId?: string;
-  appleId?: string;
+  google_id?: string;
+  facebook_id?: string;
+  apple_id?: string;
   role?: 'ADMIN' | 'USER';
   gender?: 'MALE' | 'FEMALE' | 'OTHERS';
   image?: string;
-  age?: number;
-  payment?: boolean;
-  subscription?: boolean;
-  isDeleted?: boolean;
+  is_deleted?: boolean;
   authentication?: {
-    isResetPassword: boolean;
-    oneTimeCode: number;
-    expireAt: Date;
+    is_reset_password: boolean;
+    one_time_code: number;
+    expire_at: Date;
   };
   verified: boolean;
 };
@@ -31,11 +27,3 @@ export type UserModal = {
   isAccountCreated(id: string): any;
   isMatchPassword(password: string, hashPassword: string): boolean;
 } & Model<IUser>;
-
-/*
-  authentication?: {
-    isResetPassword: boolean;
-    oneTimeCode: number;
-    expireAt: Date;
-  };
-  */

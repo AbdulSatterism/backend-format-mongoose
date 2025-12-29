@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-unused-vars */
 import { NextFunction, Request, Response } from 'express';
-import { StatusCodes } from 'http-status-codes';
 import catchAsync from '../../../shared/catchAsync';
 import sendResponse from '../../../shared/sendResponse';
 import { UserService } from './user.service';
 import getFilePath from '../../../shared/getFilePath';
+
+import statusCodes from 'http-status-codes';
 
 const createUser = catchAsync(async (req: Request, res: Response) => {
   const value = {
@@ -16,7 +17,7 @@ const createUser = catchAsync(async (req: Request, res: Response) => {
 
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.OK,
+    status_code: statusCodes.OK,
     message: 'Please check your email to verify your account.',
   });
 });
@@ -26,13 +27,13 @@ const getAllUser = catchAsync(async (req, res) => {
 
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.OK,
+    status_code: statusCodes.OK,
     message: 'all user retrieved successfully',
     meta: {
       page: Number(result.meta.page),
       limit: Number(result.meta.limit),
-      totalPage: result.meta.totalPage,
-      total: result.meta.total,
+      total_data_page: result.meta.total_data_page,
+      total_data: result.meta.total_data,
     },
     data: result.data,
   });
@@ -44,7 +45,7 @@ const getUserProfile = catchAsync(async (req: Request, res: Response) => {
 
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.OK,
+    status_code: statusCodes.OK,
     message: 'Profile data retrieved successfully',
     data: result,
   });
@@ -58,7 +59,7 @@ const updateProfile = catchAsync(async (req: Request, res: Response) => {
 
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.OK,
+    status_code: statusCodes.OK,
     message: 'Profile updated successfully',
     data: result,
   });
@@ -68,7 +69,7 @@ const getSingleUser = catchAsync(async (req: Request, res: Response) => {
   const result = await UserService.getSingleUser(req.params.id);
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.OK,
+    status_code: statusCodes.OK,
     message: 'User retrived successfully',
     data: result,
   });
@@ -86,7 +87,7 @@ const searchByPhone = catchAsync(async (req: Request, res: Response) => {
 
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.OK,
+    status_code: statusCodes.OK,
     message: 'get user by searching phone number',
     data: result,
   });

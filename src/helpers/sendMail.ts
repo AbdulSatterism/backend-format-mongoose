@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { StatusCodes } from 'http-status-codes';
+import statusCodes from 'http-status-codes';
 import config from '../config';
 import AppError from '../app/errors/AppError';
 
@@ -120,7 +120,7 @@ export async function sendEmail(email: string, subject: string, text: string) {
     return info;
   } catch (error) {
     throw new AppError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
+      statusCodes.INTERNAL_SERVER_ERROR,
       'Error sending email',
     );
   }

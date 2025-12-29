@@ -5,12 +5,12 @@ import { logger } from '../shared/logger';
 
 const socket = (io: Server) => {
   io.on('connection', socket => {
-    console.log('A user connected:', socket.id);
+    logger.info(chalk.green(`A user connected to socket.io: ${socket.id}`));
 
     // Join a chat room
     socket.on('join', roomId => {
       socket.join(roomId);
-      console.log(`User joined room: ${roomId}`);
+      logger.info(chalk.green(`User joined room: ${roomId}`));
     });
 
     // socket.on('send-message', async ({ roomId, senderId, message }) => {
@@ -45,7 +45,9 @@ const socket = (io: Server) => {
 
     // Handle disconnection
     socket.on('disconnect', () => {
-      logger.info(chalk.red('A user disconnect'));
+      logger.info(
+        chalk.red(`A user disconnected from socket.io: ${socket.id}`),
+      );
     });
   });
 };

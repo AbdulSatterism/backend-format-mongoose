@@ -1,66 +1,53 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import bcrypt from 'bcrypt';
-import { StatusCodes } from 'http-status-codes';
 import { model, Schema } from 'mongoose';
 import config from '../../../config';
 import { IUser, UserModal } from './user.interface';
 import AppError from '../../errors/AppError';
+import statusCodes from 'http-status-codes';
 
 const userSchema = new Schema<IUser, UserModal>(
   {
     name: {
       type: String,
-      required: true,
+      required: false,
+      default: '',
     },
     email: {
       type: String,
-      required: true,
-      unique: true,
+      required: false,
       lowercase: true,
     },
     password: {
       type: String,
-      required: true,
+      required: false,
       select: 0,
-      minlength: 8,
     },
-    googleId: {
+    google_id: {
       type: String,
     },
-    facebookId: {
+    facebook_id: {
       type: String,
     },
-    appleId: {
+    apple_id: {
       type: String,
     },
-    phone: {
-      type: String,
-      required: true,
-    },
+
     role: {
       type: String,
       default: 'USER',
     },
     image: {
       type: String,
-      default: '/default/user.jpg',
+      default: '',
     },
     gender: {
       type: String,
+      required: false,
       enum: ['MALE', 'FEMALE', 'OTHERS'],
     },
-    age: {
-      type: Number,
-    },
-    payment: {
-      type: Boolean,
-      default: false,
-    },
-    subscription: {
-      type: Boolean,
-      default: false,
-    },
-    isDeleted: {
+
+    is_deleted: {
       type: Boolean,
       default: false,
     },
@@ -71,15 +58,15 @@ const userSchema = new Schema<IUser, UserModal>(
 
     authentication: {
       type: {
-        isResetPassword: {
+        is_reset_password: {
           type: Boolean,
           default: false,
         },
-        oneTimeCode: {
+        one_time_code: {
           type: Number,
           default: null,
         },
-        expireAt: {
+        expire_at: {
           type: Date,
           default: null,
         },
@@ -87,7 +74,7 @@ const userSchema = new Schema<IUser, UserModal>(
       select: 0,
     },
   },
-  { timestamps: true },
+  { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } },
 );
 
 //exist user check
@@ -120,7 +107,7 @@ userSchema.pre('save', async function (next) {
   //check user
   const isExist = await User.findOne({ email: this.email });
   if (isExist) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Email already used');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Email already used');
   }
 
   //password hash

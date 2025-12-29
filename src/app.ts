@@ -4,6 +4,7 @@ import globalErrorHandler from './app/middlewares/globalErrorHandler';
 import router from './routes';
 import { Morgan } from './shared/morgen';
 import notFoundRoute from './app/middlewares/notFoundRoute';
+import cookieParser from 'cookie-parser';
 
 const app = express();
 
@@ -18,6 +19,9 @@ app.use(
     credentials: true,
   }),
 );
+// cookies parser
+
+app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -31,7 +35,7 @@ app.use('/api/v1', router);
 //live response
 app.get('/', (req: Request, res: Response) => {
   res.send(
-    '<h1 style="text-align:center; color:#A55FEF; font-family:Verdana;">Hay Ozzy how can i assist you</h1>',
+    '<h1 style="text-align:center; color:#A55FEF; font-family:Verdana;">Server is running......</h1>',
   );
 });
 

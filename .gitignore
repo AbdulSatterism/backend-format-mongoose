@@ -5,3 +5,6 @@ vscode
 /winston
 .vercel
 dist
+
+uploads
+winston

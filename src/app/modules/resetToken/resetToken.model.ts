@@ -11,7 +11,7 @@ const resetTokenSchema = new Schema<IResetToken, ResetTokenModel>(
       type: String,
       required: true,
     },
-    expireAt: {
+    expire_at: {
       type: Date,
       required: true,
     },
@@ -31,7 +31,7 @@ resetTokenSchema.statics.isExpireToken = async (token: string) => {
   const currentDate = new Date();
   const resetToken = await ResetToken.findOne({
     token,
-    expireAt: { $gt: currentDate },
+    expire_at: { $gt: currentDate },
   });
   return !!resetToken;
 };

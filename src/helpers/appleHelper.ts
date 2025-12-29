@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import jwt from 'jsonwebtoken';
 import jwksRsa from 'jwks-rsa';
-import { StatusCodes } from 'http-status-codes';
+import statusCodes from 'http-status-codes';
 import AppError from '../app/errors/AppError';
 
 /**
  * Create JWKS client for Apple public keys
  */
 const client = jwksRsa({
-  jwksUri: 'https://appleid.apple.com/auth/keys',
+  jwksUri: 'https://apple_id.apple.com/auth/keys',
   cache: true,
   rateLimit: true,
 });
@@ -20,7 +20,7 @@ const getAppleSigningKey = async (kid: string): Promise<string> => {
     if (!signingKey) throw new Error('Unable to retrieve Apple signing key');
     return signingKey;
   } catch (err) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Failed to load Apple key');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Failed to load Apple key');
   }
 };
 
@@ -31,19 +31,19 @@ export const verifyAppleToken = async (token: string) => {
   try {
     const decodedHeader: any = jwt.decode(token, { complete: true });
     if (!decodedHeader?.header?.kid)
-      throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid Apple token header');
+      throw new AppError(statusCodes.BAD_REQUEST, 'Invalid Apple token header');
 
     const signingKey = await getAppleSigningKey(decodedHeader.header.kid);
 
     const verified = jwt.verify(token, signingKey, {
       algorithms: ['RS256'],
-      issuer: 'https://appleid.apple.com',
+      issuer: 'https://apple_id.apple.com',
     }) as jwt.JwtPayload;
 
     return verified;
   } catch {
     throw new AppError(
-      StatusCodes.BAD_REQUEST,
+      statusCodes.BAD_REQUEST,
       'Invalid or expired Apple identity token',
     );
   }

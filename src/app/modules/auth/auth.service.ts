@@ -2,7 +2,6 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import bcrypt from 'bcrypt';
-import { StatusCodes } from 'http-status-codes';
 import { JwtPayload, Secret } from 'jsonwebtoken';
 import config from '../../../config';
 import { emailHelper } from '../../../helpers/emailHelper';
@@ -23,29 +22,19 @@ import AppError from '../../errors/AppError';
 import unlinkFile from '../../../shared/unlinkFile';
 import { downloadImage, facebookToken } from './auth.lib';
 import { verifyAppleToken } from '../../../helpers/appleHelper';
+import statusCodes from 'http-status-codes';
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
   const { email, password } = payload;
   const isExistUser = await User.findOne({ email }).select('+password');
   if (!isExistUser) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
-  }
-
-  //check verified and status
-  if (!isExistUser.verified) {
-    throw new AppError(
-      StatusCodes.BAD_REQUEST,
-      'Please verify your account, then try to login again',
-    );
+    throw new AppError(statusCodes.NOT_FOUND, "User doesn't exist!");
   }
 
   //check match password
-  if (
-    password &&
-    !(await User.isMatchPassword(password, isExistUser.password))
-  ) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Password is incorrect!');
+  if (password && !User.isMatchPassword(password, isExistUser.password)) {
+    throw new AppError(statusCodes.BAD_REQUEST, 'Password is incorrect!');
   }
 
   const tokenPayload = {
@@ -55,14 +44,14 @@ const loginUserFromDB = async (payload: ILoginData) => {
   };
 
   //create access token
-  const accessToken = jwtHelper.createToken(
+  const access_token = jwtHelper.createToken(
     tokenPayload,
     config.jwt.jwt_secret as Secret,
     config.jwt.jwt_expire_in as string,
   );
 
   //create refresh token
-  const refreshToken = jwtHelper.createToken(
+  const refresh_token = jwtHelper.createToken(
     tokenPayload,
     config.jwt.jwtRefreshSecret as Secret,
     config.jwt.jwtRefreshExpiresIn as string,
@@ -71,14 +60,14 @@ const loginUserFromDB = async (payload: ILoginData) => {
   // send user data without password
   const { password: _, ...userWithoutPassword } = isExistUser.toObject();
 
-  return { user: userWithoutPassword, accessToken, refreshToken };
+  return { user: userWithoutPassword, access_token, refresh_token };
 };
 
 //forget password
 const forgetPasswordToDB = async (email: string) => {
   const isExistUser = await User.isExistUserByEmail(email);
   if (!isExistUser) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+    throw new AppError(statusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
   //send mail
@@ -92,36 +81,36 @@ const forgetPasswordToDB = async (email: string) => {
 
   //save to DB
   const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 20 * 60000),
+    one_time_code: otp,
+    expire_at: new Date(Date.now() + 20 * 60000),
   };
   await User.findOneAndUpdate({ email }, { $set: { authentication } });
 };
 
 const verifyEmailToDB = async (payload: IVerifyEmail) => {
-  const { email, oneTimeCode } = payload;
+  const { email, one_time_code } = payload;
 
   const isExistUser = await User.findOne({ email }).select('+authentication');
   if (!isExistUser) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+    throw new AppError(statusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
-  if (!oneTimeCode) {
+  if (!one_time_code) {
     throw new AppError(
-      StatusCodes.BAD_REQUEST,
+      statusCodes.BAD_REQUEST,
       'Please give the otp, check your email we send a code',
     );
   }
 
-  // console.log(isExistUser.authentication?.oneTimeCode, { payload });
-  if (isExistUser.authentication?.oneTimeCode !== oneTimeCode) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'You provided wrong otp');
+  // console.log(isExistUser.authentication?.one_time_code, { payload });
+  if (isExistUser.authentication?.one_time_code !== one_time_code) {
+    throw new AppError(statusCodes.BAD_REQUEST, 'You provided wrong otp');
   }
 
   const date = new Date();
-  if (date > isExistUser.authentication?.expireAt) {
+  if (date > isExistUser.authentication?.expire_at) {
     throw new AppError(
-      StatusCodes.BAD_REQUEST,
+      statusCodes.BAD_REQUEST,
       'Otp already expired, Please try again',
     );
   }
@@ -133,14 +122,14 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
   };
 
   //create access token
-  const accessToken = jwtHelper.createToken(
+  const access_token = jwtHelper.createToken(
     tokenPayload,
     config.jwt.jwt_secret as Secret,
     config.jwt.jwt_expire_in as string,
   );
 
   //create refresh token
-  const refreshToken = jwtHelper.createToken(
+  const refresh_token = jwtHelper.createToken(
     tokenPayload,
     config.jwt.jwtRefreshSecret as Secret,
     config.jwt.jwtRefreshExpiresIn as string,
@@ -149,21 +138,26 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
   let message;
   let data;
 
+  const user = await User.findById(isExistUser._id);
+
   if (!isExistUser.verified) {
     await User.findOneAndUpdate(
       { _id: isExistUser._id },
-      { verified: true, authentication: { oneTimeCode: null, expireAt: null } },
+      {
+        verified: true,
+        authentication: { one_time_code: null, expire_at: null },
+      },
     );
     message = 'Your email has been successfully verified.';
-    data = { user: isExistUser, accessToken, refreshToken };
+    data = { user, access_token, refresh_token };
   } else {
     await User.findOneAndUpdate(
       { _id: isExistUser._id },
       {
         authentication: {
-          isResetPassword: true,
-          oneTimeCode: null,
-          expireAt: null,
+          is_reset_password: true,
+          one_time_code: null,
+          expire_at: null,
         },
       },
     );
@@ -171,11 +165,12 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
     // const createToken = cryptoToken();
     await ResetToken.create({
       user: isExistUser._id,
-      token: accessToken,
-      expireAt: new Date(Date.now() + 20 * 60000),
+      token: access_token,
+      expire_at: new Date(Date.now() + 20 * 60000),
     });
+
     message = 'Verification Successful';
-    data = { user: isExistUser, accessToken, refreshToken };
+    data = { user, access_token, refresh_token };
   }
 
   return { data, message };
@@ -185,22 +180,22 @@ const resetPasswordToDB = async (
   token: string,
   payload: IAuthResetPassword,
 ) => {
-  const { newPassword, confirmPassword } = payload;
+  const { newPassword } = payload;
 
   //isExist token
   const isExistToken = await ResetToken.isExistToken(token);
 
   if (!isExistToken) {
-    throw new AppError(StatusCodes.UNAUTHORIZED, 'You are not authorized');
+    throw new AppError(statusCodes.UNAUTHORIZED, 'You are not authorized');
   }
 
   //user permission check
   const isExistUser = await User.findById(isExistToken.user).select(
     '+authentication',
   );
-  if (!isExistUser?.authentication?.isResetPassword) {
+  if (!isExistUser?.authentication?.is_reset_password) {
     throw new AppError(
-      StatusCodes.UNAUTHORIZED,
+      statusCodes.UNAUTHORIZED,
       "You don't have permission to change the password. Please click again to 'Forgot Password'",
     );
   }
@@ -209,16 +204,8 @@ const resetPasswordToDB = async (
   const isValid = await ResetToken.isExpireToken(token);
   if (!isValid) {
     throw new AppError(
-      StatusCodes.BAD_REQUEST,
+      statusCodes.BAD_REQUEST,
       'Token expired, Please click again to the forget password',
-    );
-  }
-
-  //check password
-  if (newPassword !== confirmPassword) {
-    throw new AppError(
-      StatusCodes.BAD_REQUEST,
-      "New password and Confirm password doesn't match!",
     );
   }
 
@@ -230,7 +217,7 @@ const resetPasswordToDB = async (
   const updateData = {
     password: hashPassword,
     authentication: {
-      isResetPassword: false,
+      is_reset_password: false,
     },
   };
 
@@ -243,33 +230,26 @@ const changePasswordToDB = async (
   user: JwtPayload,
   payload: IChangePassword,
 ) => {
-  const { currentPassword, newPassword, confirmPassword } = payload;
+  const { currentPassword, newPassword } = payload;
 
   const isExistUser = await User.findById(user.id).select('+password');
   if (!isExistUser) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+    throw new AppError(statusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
   //current password match
   if (
     currentPassword &&
-    !(await User.isMatchPassword(currentPassword, isExistUser.password))
+    !User.isMatchPassword(currentPassword, isExistUser.password)
   ) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Password is incorrect');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Password is incorrect');
   }
 
   //newPassword and current password
   if (currentPassword === newPassword) {
     throw new AppError(
-      StatusCodes.BAD_REQUEST,
+      statusCodes.BAD_REQUEST,
       'Please give different password from current password',
-    );
-  }
-  //new password and confirm password check
-  if (newPassword !== confirmPassword) {
-    throw new AppError(
-      StatusCodes.BAD_REQUEST,
-      "Password and Confirm password doesn't matched",
     );
   }
 
@@ -288,16 +268,16 @@ const changePasswordToDB = async (
 const deleteAccountToDB = async (user: JwtPayload) => {
   const result = await User.findByIdAndDelete(user?.id);
   if (!result) {
-    throw new AppError(StatusCodes.NOT_FOUND, 'No User found');
+    throw new AppError(statusCodes.NOT_FOUND, 'No User found');
   }
 
   return result;
 };
 
-const newAccessTokenToUser = async (token: string) => {
+const newaccess_tokenToUser = async (token: string) => {
   // Check if the token is provided
   if (!token) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Token is required!');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Token is required!');
   }
 
   const verifyUser = jwtHelper.verifyToken(
@@ -307,17 +287,17 @@ const newAccessTokenToUser = async (token: string) => {
 
   const isExistUser = await User.findById(verifyUser?.id);
   if (!isExistUser) {
-    throw new AppError(StatusCodes.UNAUTHORIZED, 'Unauthorized access');
+    throw new AppError(statusCodes.UNAUTHORIZED, 'Unauthorized access');
   }
 
   //create token
-  const accessToken = jwtHelper.createToken(
+  const access_token = jwtHelper.createToken(
     { id: isExistUser._id, role: isExistUser.role, email: isExistUser.email },
     config.jwt.jwt_secret as Secret,
     config.jwt.jwt_expire_in as string,
   );
 
-  return { accessToken };
+  return { access_token };
 };
 
 const resendVerificationEmailToDB = async (email: string) => {
@@ -326,13 +306,13 @@ const resendVerificationEmailToDB = async (email: string) => {
 
   if (!existingUser) {
     throw new AppError(
-      StatusCodes.NOT_FOUND,
+      statusCodes.NOT_FOUND,
       'User with this email does not exist!',
     );
   }
 
   if (existingUser?.isVerified) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'User is already verified!');
+    throw new AppError(statusCodes.BAD_REQUEST, 'User is already verified!');
   }
 
   // Generate OTP and prepare email
@@ -347,8 +327,8 @@ const resendVerificationEmailToDB = async (email: string) => {
 
   // Update user with authentication details
   const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 20 * 60000),
+    one_time_code: otp,
+    expire_at: new Date(Date.now() + 20 * 60000),
   };
 
   await User.findOneAndUpdate(
@@ -371,7 +351,7 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
   const { email, name, image, uid } = payload;
 
   if (!email || !uid) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Email and UID are required');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Email and UID are required');
   }
 
   // Check if user exists by email
@@ -387,16 +367,16 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
       email,
       name,
       image: image || '',
-      googleId: uid,
+      google_id: uid,
       role: 'USER',
       verified: true, // Google accounts are pre-verified
     });
-  } else if (!user.googleId) {
+  } else if (!user.google_id) {
     // Update existing user with Google ID if they haven't logged in with Google before
     user = await User.findByIdAndUpdate(
       user._id,
       {
-        googleId: uid,
+        google_id: uid,
         verified: true,
         image: image || user.image, // Keep existing image if no new image provided
       },
@@ -406,7 +386,7 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
 
   if (!user) {
     throw new AppError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
+      statusCodes.INTERNAL_SERVER_ERROR,
       'Failed to create or update user',
     );
   }
@@ -418,13 +398,13 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
     role: user.role,
   };
 
-  const accessToken = jwtHelper.createToken(
+  const access_token = jwtHelper.createToken(
     tokenPayload,
     config.jwt.jwt_secret as Secret,
     config.jwt.jwt_expire_in as string,
   );
 
-  const refreshToken = jwtHelper.createToken(
+  const refresh_token = jwtHelper.createToken(
     tokenPayload,
     config.jwt.jwtRefreshSecret as Secret,
     config.jwt.jwtRefreshExpiresIn as string,
@@ -437,14 +417,14 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
 
   return {
     user: userObject,
-    accessToken,
-    refreshToken,
+    access_token,
+    refresh_token,
   };
 };
 
 const facebookLogin = async (payload: { token: string }) => {
   if (!payload.token) {
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Facebook token is required');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Facebook token is required');
   }
 
   try {
@@ -452,7 +432,7 @@ const facebookLogin = async (payload: { token: string }) => {
 
     if (!userData?.email) {
       throw new AppError(
-        StatusCodes.BAD_REQUEST,
+        statusCodes.BAD_REQUEST,
         'Unable to get email from Facebook account',
       );
     }
@@ -470,13 +450,13 @@ const facebookLogin = async (payload: { token: string }) => {
       name: userData.name || '',
       email: userData.email,
       image: localImage || '',
-      facebookId: userData.id,
+      facebook_id: userData.id,
       role: 'USER' as const,
       verified: true,
     };
 
     let user = await User.findOne({
-      $or: [{ email: userData.email }, { facebookId: userData.id }],
+      $or: [{ email: userData.email }, { facebook_id: userData.id }],
     });
 
     if (user?.image && localImage) {
@@ -485,7 +465,7 @@ const facebookLogin = async (payload: { token: string }) => {
 
     if (!user) {
       user = await User.create(userFields);
-    } else if (!user.facebookId) {
+    } else if (!user.facebook_id) {
       user = await User.findByIdAndUpdate(
         user._id,
         {
@@ -499,7 +479,7 @@ const facebookLogin = async (payload: { token: string }) => {
 
     if (!user) {
       throw new AppError(
-        StatusCodes.INTERNAL_SERVER_ERROR,
+        statusCodes.INTERNAL_SERVER_ERROR,
         'Failed to create or update user',
       );
     }
@@ -510,7 +490,7 @@ const facebookLogin = async (payload: { token: string }) => {
       role: user.role,
     };
 
-    const [accessToken, refreshToken] = await Promise.all([
+    const [access_token, refresh_token] = await Promise.all([
       jwtHelper.createToken(
         tokenPayload,
         config.jwt.jwt_secret as Secret,
@@ -525,11 +505,11 @@ const facebookLogin = async (payload: { token: string }) => {
 
     const { password, authentication, ...userObject } = user.toObject();
 
-    return { user: userObject, accessToken, refreshToken };
+    return { user: userObject, access_token, refresh_token };
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
+      statusCodes.INTERNAL_SERVER_ERROR,
       'Error processing Facebook login',
     );
   }
@@ -537,7 +517,7 @@ const facebookLogin = async (payload: { token: string }) => {
 
 const appleLogin = async (payload: { token: string }) => {
   if (!payload.token)
-    throw new AppError(StatusCodes.BAD_REQUEST, 'Apple token is required');
+    throw new AppError(statusCodes.BAD_REQUEST, 'Apple token is required');
 
   try {
     // Step 1 — Verify Apple ID token
@@ -545,7 +525,7 @@ const appleLogin = async (payload: { token: string }) => {
 
     if (!appleData?.email) {
       throw new AppError(
-        StatusCodes.BAD_REQUEST,
+        statusCodes.BAD_REQUEST,
         'Unable to retrieve email from Apple account',
       );
     }
@@ -554,19 +534,19 @@ const appleLogin = async (payload: { token: string }) => {
     const userFields = {
       name: appleData.name || '',
       email: appleData.email,
-      appleId: appleData.sub,
+      apple_id: appleData.sub,
       role: 'USER' as const,
       verified: true,
     };
 
     // Step 3 — Find or create user
     let user = await User.findOne({
-      $or: [{ email: appleData.email }, { appleId: appleData.sub }],
+      $or: [{ email: appleData.email }, { apple_id: appleData.sub }],
     });
 
     if (!user) {
       user = await User.create(userFields);
-    } else if (!user.appleId) {
+    } else if (!user.apple_id) {
       user = await User.findByIdAndUpdate(
         user._id,
         { ...userFields, name: userFields.name || user.name },
@@ -576,7 +556,7 @@ const appleLogin = async (payload: { token: string }) => {
 
     if (!user) {
       throw new AppError(
-        StatusCodes.INTERNAL_SERVER_ERROR,
+        statusCodes.INTERNAL_SERVER_ERROR,
         'Failed to create or update user',
       );
     }
@@ -588,7 +568,7 @@ const appleLogin = async (payload: { token: string }) => {
       role: user.role,
     };
 
-    const [accessToken, refreshToken] = await Promise.all([
+    const [access_token, refresh_token] = await Promise.all([
       jwtHelper.createToken(
         tokenPayload,
         config.jwt.jwt_secret as Secret,
@@ -603,14 +583,45 @@ const appleLogin = async (payload: { token: string }) => {
 
     // Step 5 — Prepare response
     const { password, authentication, ...userObject } = user.toObject();
-    return { user: userObject, accessToken, refreshToken };
+    return { user: userObject, access_token, refresh_token };
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
+      statusCodes.INTERNAL_SERVER_ERROR,
       'Error processing Apple login',
     );
   }
+};
+
+const accessToken = async (token: string) => {
+  // now check if the token is provided
+  if (!token) {
+    throw new AppError(statusCodes.BAD_REQUEST, 'Token is required!');
+  }
+
+  const verifyUser = jwtHelper.verifyToken(
+    token,
+    config.jwt.jwtRefreshSecret as Secret,
+  );
+
+  const isExistUser = await User.findById(verifyUser?.id);
+  if (!isExistUser) {
+    throw new AppError(statusCodes.UNAUTHORIZED, 'Unauthorized access');
+  }
+
+  const tokenPayload = {
+    id: isExistUser._id,
+    email: isExistUser.email,
+    role: isExistUser.role,
+  };
+
+  const accessToken = jwtHelper.createToken(
+    tokenPayload,
+    config.jwt.jwt_secret as Secret,
+    config.jwt.jwt_expire_in as string,
+  );
+
+  return { access_token: accessToken };
 };
 
 export const AuthService = {
@@ -620,9 +631,10 @@ export const AuthService = {
   resetPasswordToDB,
   changePasswordToDB,
   deleteAccountToDB,
-  newAccessTokenToUser,
+  newaccess_tokenToUser,
   resendVerificationEmailToDB,
   googleLogin,
   facebookLogin,
   appleLogin,
+  accessToken,
 };

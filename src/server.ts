@@ -31,6 +31,7 @@ async function main() {
       );
     });
 
+    //seed admin user
     await seedAdmin();
 
     //socket
