@@ -23,6 +23,12 @@ app.use(
 
 app.use(cookieParser());
 
+app.post(
+  '/api/v1/subscriptions',
+  express.raw({ type: 'application/json' }),
+  StripeWebhookController.handleWebhook,
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
