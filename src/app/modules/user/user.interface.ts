@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-unused-vars */
 import { Model } from 'mongoose';
+import { ISubscription } from '../subscription/subscription.interface';
 
 export type IUser = {
   name?: string;
@@ -19,7 +20,14 @@ export type IUser = {
     expire_at: Date;
   };
   verified: boolean;
+    stripe_customer_id?: string;
+
+  subscription?: ISubscription;
+
 };
+
+
+
 
 export type UserModal = {
   isExistUserById(id: string): any;

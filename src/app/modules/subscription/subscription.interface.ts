@@ -1,17 +1,9 @@
-/**
- * Normalized subscription status (OURS, not Stripe's raw enum).
- * Stripe has more states (incomplete, trialing, unpaid, paused...) which we map.
- */
 export type SubscriptionStatus =
   | 'active'
   | 'inactive'
   | 'past_due'
   | 'canceled';
 
-/**
- * Embedded subscription record stored on the User document.
- * (Add this to your IUser — see patches/user.interface.ts)
- */
 export type ISubscription = {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
@@ -25,6 +17,4 @@ export type ICreateCheckoutSessionPayload = {
   cancelUrl?: string;
 };
 
-export type ICancelSubscriptionPayload = {
-  immediately?: boolean;
-};
+export type ICancelSubscriptionPayload = { immediately?: boolean };

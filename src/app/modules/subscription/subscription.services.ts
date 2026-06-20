@@ -1,20 +1,21 @@
 import Stripe from 'stripe';
 import { StatusCodes } from 'http-status-codes';
 
-import { stripe, STRIPE_PRICE_ID, APP_URL } from '../../../config/stripe';
-import ApiError from '../../../errors/ApiError';
-// NOTE: adjust this import to wherever your User model lives.
+
 import { User } from '../user/user.model';
 import type { IUser } from '../user/user.interface';
 import type { ISubscription, SubscriptionStatus } from './subscription.interface';
+import AppError from '../../errors/AppError';
+import { stripe } from './stripe';
 
-/* -------------------------------------------------------------------------- */
-/* Helpers (Stripe Basil-API aware)                                           */
-/* -------------------------------------------------------------------------- */
+type StripeSubscription = Awaited<
+  ReturnType<typeof stripe.subscriptions.retrieve>
+>;
+type StripeSubscriptionStatus = StripeSubscription['status'];
 
 /** Map Stripe's status enum to our normalized status. */
 const mapStripeStatus = (
-  s: Stripe.Subscription.Status,
+  s: StripeSubscriptionStatus,
 ): SubscriptionStatus => {
   switch (s) {
     case 'active':
@@ -31,7 +32,7 @@ const mapStripeStatus = (
 };
 
 /** Access is granted only while Stripe reports active/trialing. */
-const computeIsActive = (s: Stripe.Subscription.Status): boolean =>
+const computeIsActive = (s: StripeSubscriptionStatus): boolean =>
   s === 'active' || s === 'trialing';
 
 /**
@@ -39,7 +40,7 @@ const computeIsActive = (s: Stripe.Subscription.Status): boolean =>
  * Subscription object to each subscription ITEM. Read item-level first, fall
  * back to the legacy top-level field so it works on any pinned version.
  */
-const getCurrentPeriodEnd = (sub: Stripe.Subscription): Date => {
+const getCurrentPeriodEnd = (sub: StripeSubscription): Date => {
   const itemEnd = sub.items?.data?.[0]?.current_period_end;
   const legacyEnd = (sub as unknown as { current_period_end?: number })
     .current_period_end;
@@ -115,10 +116,10 @@ const createCheckoutSession = async (
   payload: { successUrl?: string; cancelUrl?: string } = {},
 ): Promise<{ url: string; sessionId: string }> => {
   const user = await User.findById(userId);
-  if (!user) throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  if (!user) throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
 
   if (user.subscription?.isActive) {
-    throw new ApiError(
+    throw new AppError(
       StatusCodes.CONFLICT,
       'You already have an active subscription',
     );
@@ -146,7 +147,7 @@ const createCheckoutSession = async (
   );
 
   if (!session.url) {
-    throw new ApiError(
+    throw new AppError(
       StatusCodes.INTERNAL_SERVER_ERROR,
       'Stripe did not return a Checkout URL',
     );
@@ -205,7 +206,7 @@ const cancel = async (userId: string, immediately = false) => {
 /* -------------------------------------------------------------------------- */
 
 /** Resolve the owning user from a subscription via metadata or stored ids. */
-const resolveUserFromSubscription = async (subscription: Stripe.Subscription) => {
+const resolveUserFromSubscription = async (subscription: StripeSubscription) => {
   const metaUserId = subscription.metadata?.userId;
   if (metaUserId) {
     const byMeta = await User.findById(metaUserId);
@@ -226,7 +227,7 @@ const resolveUserFromSubscription = async (subscription: Stripe.Subscription) =>
  * webhook + the cancel endpoint funnels through here. Returns the updated user,
  * or null if no matching user was found.
  */
-const syncSubscriptionToDb = async (subscription: Stripe.Subscription) => {
+const syncSubscriptionToDb = async (subscription: StripeSubscription) => {
   const user = await resolveUserFromSubscription(subscription);
   if (!user) {
     // eslint-disable-next-line no-console
@@ -264,14 +265,11 @@ const patchSubscription = async (
 const retrieveSubscription = (id: string) => stripe.subscriptions.retrieve(id);
 
 export const SubscriptionService = {
-  // commands
   createCheckoutSession,
   getStatus,
   cancel,
-  // webhook-facing
   syncSubscriptionToDb,
   patchSubscription,
   retrieveSubscription,
-  // helpers (exported for the webhook handler + tests)
   getSubscriptionIdFromInvoice,
 };

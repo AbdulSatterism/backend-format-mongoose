@@ -1,22 +1,11 @@
 import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-
-// NOTE: adjust these import paths to your project's shared utilities.
 import catchAsync from '../../../shared/catchAsync';
+import { SubscriptionService } from './subscription.services';
 import sendResponse from '../../../shared/sendResponse';
-import { SubscriptionService } from './subscription.service';
 
-/**
- * `auth()` middleware in this boilerplate attaches the decoded JWT to req.user,
- * which contains `id`. We read it here and pass primitives into the service.
- */
-const getUserId = (req: Request): string => {
-  const user = req.user as unknown as { id: string };
-  return user.id;
-};
-
-const createCheckoutSession = catchAsync(async (req: Request, res: Response) => {
-  const userId = getUserId(req);
+const createCheckoutSession = catchAsync(async (req, res) => {
+  const userId = req.user.id;
   const result = await SubscriptionService.createCheckoutSession(userId, {
     successUrl: req.body?.successUrl,
     cancelUrl: req.body?.cancelUrl,
@@ -30,7 +19,7 @@ const createCheckoutSession = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
-const getStatus = catchAsync(async (req: Request, res: Response) => {
+const getStatus = catchAsync(async (req, res) => {
   const userId = getUserId(req);
   const result = await SubscriptionService.getStatus(userId);
 
@@ -42,7 +31,7 @@ const getStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const cancelSubscription = catchAsync(async (req: Request, res: Response) => {
+const cancelSubscription = catchAsync(async (req, res) => {
   const userId = getUserId(req);
   const immediately = Boolean(req.body?.immediately);
   const result = await SubscriptionService.cancel(userId, immediately);
