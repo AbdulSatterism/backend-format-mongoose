@@ -50,9 +50,7 @@ const getCurrentPeriodEnd = (sub: StripeSubscription): Date => {
   return unix ? new Date(unix * 1000) : new Date();
 };
 
-/**
- * Get current period start
- */
+/** Get current period start (item-level, with legacy fallback). */
 const getCurrentPeriodStart = (sub: StripeSubscription): Date => {
   const itemStart = sub.items?.data?.[0]?.current_period_start;
   const legacyStart = (sub as unknown as { current_period_start?: number })
@@ -93,10 +91,6 @@ const customerIdOf = (
 /* Customer management                                                        */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Return the user's Stripe customer id, creating one (and persisting it on the
- * user) if needed. We stamp metadata.userId so webhooks can always resolve back.
- */
 const getOrCreateCustomer = async (
   user: IUser & { _id: unknown },
 ): Promise<string> => {
@@ -136,16 +130,10 @@ const getOrCreateCustomer = async (
 /* Checkout                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Create a Checkout Session in `subscription` mode for the single plan.
- * Payment methods are NOT hardcoded, so Cards + Apple Pay + Google Pay all show
- * based on what you enable in Dashboard -> Settings -> Payment methods.
- */
 const createCheckoutSession = async (
   userId: string,
 ): Promise<{ url: string; sessionId: string }> => {
   const user = await User.findById(userId);
-
   if (!user) throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
 
   if (user.subscription?.isActive) {
@@ -160,7 +148,6 @@ const createCheckoutSession = async (
 
   const customerId = await getOrCreateCustomer(user);
 
-  // Use environment-based URLs with fallback
   const successUrl = `${APP_URL}/api/v1/subscriptions/success`;
   const cancelUrl = `${APP_URL}/api/v1/subscriptions/cancel`;
 
@@ -175,7 +162,6 @@ const createCheckoutSession = async (
         success_url: successUrl,
         cancel_url: cancelUrl,
       },
-      // Idempotency: a double-click won't create two checkout sessions.
       {
         idempotencyKey: `checkout:${String(user._id)}:${config.stripe.price_id}`,
       },
@@ -226,11 +212,6 @@ const getStatus = async (userId: string) => {
   };
 };
 
-/**
- * Cancel at period end by default (customer keeps the access they paid for);
- * the final customer.subscription.deleted webhook flips isActive=false when the
- * period actually ends. Pass immediately=true to cancel now.
- */
 const cancel = async (userId: string, immediately = false) => {
   const user = await User.findById(userId);
   if (!user) throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
@@ -250,7 +231,6 @@ const cancel = async (userId: string, immediately = false) => {
           cancel_at_period_end: true,
         });
 
-    // Reflect the change immediately; the webhook is still the authoritative confirm.
     await syncSubscriptionToDb(subscription);
 
     logger.info(
@@ -274,7 +254,6 @@ const cancel = async (userId: string, immediately = false) => {
 /* Source of truth: sync                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** Resolve the owning user from a subscription via metadata or stored ids. */
 const resolveUserFromSubscription = async (
   subscription: StripeSubscription,
 ) => {
@@ -294,17 +273,12 @@ const resolveUserFromSubscription = async (
 };
 
 /**
- * Write the canonical Stripe subscription into our DB. Every subscription
- * webhook + the cancel endpoint funnels through here. Returns the updated user,
- * or null if no matching user was found.
+ * Write the canonical Stripe subscription into our DB.
  *
- * AUTO-RENEWAL EXPLANATION:
- * - When user subscribes, Stripe creates subscription with monthly billing
- * - Stripe automatically renews every month (charging the card on file)
- * - Each renewal triggers 'customer.subscription.updated' webhook
- * - This function syncs that data to our DB, keeping currentPeriodEnd updated
- * - Subscription stays active until explicitly canceled or payment fails
- * - isActive=true means user has access; webhook ensures this stays in sync
+ * IMPORTANT: this REPLACES the whole embedded subscription sub-document. So we
+ * must PRESERVE counters that live there (failedAttempts, lastErrorMessage) by
+ * carrying the existing values forward — otherwise every sync would reset them
+ * and incrementFailedAttempts could never climb past 1.
  */
 const syncSubscriptionToDb = async (subscription: StripeSubscription) => {
   const user = await resolveUserFromSubscription(subscription);
@@ -328,7 +302,9 @@ const syncSubscriptionToDb = async (subscription: StripeSubscription) => {
     cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
     isActive: computeIsActive(subscription.status),
     lastSyncedAt: new Date(),
-    failedAttempts: 0,
+    // PRESERVE the existing counter / message across a full-subdoc replace.
+    failedAttempts: user.subscription?.failedAttempts ?? 0,
+    lastErrorMessage: user.subscription?.lastErrorMessage,
   };
 
   try {
@@ -389,6 +365,40 @@ const patchSubscription = async (
   }
 };
 
+/**
+ * Increment the failed-payment counter and mark the subscription past_due.
+ * Uses $inc + dotted $set so it does NOT wipe the rest of the sub-document.
+ * Called from the webhook on invoice.payment_failed / payment_action_required.
+ */
+const incrementFailedAttempts = async (userId: string, message: string) => {
+  try {
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: { 'subscription.failedAttempts': 1 },
+        $set: {
+          'subscription.status': 'past_due',
+          'subscription.isActive': false,
+          'subscription.lastErrorMessage': message,
+          'subscription.lastSyncedAt': new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    logger.warn(
+      `[Subscription] Incremented failedAttempts for user ${userId} (${message}). Now: ${updated?.subscription?.failedAttempts}`,
+    );
+    return updated;
+  } catch (error) {
+    logger.error(
+      `[Subscription] Failed to increment failedAttempts for user ${userId}`,
+      error,
+    );
+    throw error;
+  }
+};
+
 const retrieveSubscription = (id: string) => stripe.subscriptions.retrieve(id);
 
 export const SubscriptionService = {
@@ -397,6 +407,11 @@ export const SubscriptionService = {
   cancel,
   syncSubscriptionToDb,
   patchSubscription,
+  incrementFailedAttempts,
   retrieveSubscription,
   getSubscriptionIdFromInvoice,
+  // exposed for the reconciliation monitor:
+  getCurrentPeriodEnd,
+  getCurrentPeriodStart,
+  mapStripeStatus,
 };

@@ -20,10 +20,11 @@ export type IUser = {
     expire_at: Date;
   };
   verified: boolean;
+
+  // ---- Stripe ----
   stripe_customer_id?: string;
+  // `default: null` in the schema, so this can be null at runtime.
   subscription?: ISubscription | null;
-  created_at?: Date;
-  updated_at?: Date;
 };
 
 export type UserModal = {
