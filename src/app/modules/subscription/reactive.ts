@@ -14,6 +14,7 @@ import { User } from '../user/user.model';
 import AppError from '../../errors/AppError';
 import { SubscriptionService } from './subscription.services';
 import { logger } from '../../../shared/logger';
+import config from '../../../config';
 
 /* ----------------------------- middleware -------------------------------- */
 
@@ -161,7 +162,7 @@ export const initSubscriptionMonitoring = (): ScheduledTask | null => {
     return null;
   }
 
-  const schedule = process.env.SUBSCRIPTION_MONITOR_SCHEDULE || '0 */6 * * *';
+  const schedule = config.subscriptionMonitorSchedule || '0 */6 * * *';
   const job = cron.schedule(schedule, () => {
     monitorSubscriptions().catch(err =>
       logger.error('[Subscription Monitor] Scheduled run failed', err),

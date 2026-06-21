@@ -33,4 +33,6 @@ export default {
     webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
     price_id: process.env.STRIPE_PRICE_ID,
   },
+  //SUBSCRIPTION_MONITOR_SCHEDULE
+  subscriptionMonitorSchedule: process.env.SUBSCRIPTION_MONITOR_SCHEDULE,
 };
