@@ -20,14 +20,11 @@ export type IUser = {
     expire_at: Date;
   };
   verified: boolean;
-    stripe_customer_id?: string;
-
-  subscription?: ISubscription;
-
+  stripe_customer_id?: string;
+  subscription?: ISubscription | null;
+  created_at?: Date;
+  updated_at?: Date;
 };
-
-
-
 
 export type UserModal = {
   isExistUserById(id: string): any;

@@ -9,6 +9,7 @@ import config from './config';
 import { socketHelper } from './helpers/socketHelper';
 import { errorLogger, logger } from './shared/logger';
 import seedAdmin from './DB';
+import { initSubscriptionMonitoring } from './app/modules/subscription/reactive';
 
 //uncaught exception
 process.on('uncaughtException', error => {
@@ -44,6 +45,9 @@ async function main() {
     socketHelper.socket(io);
     //@ts-ignore
     global.io = io;
+
+    // Initialize subscription monitoring for auto-renewal safety net
+    initSubscriptionMonitoring();
   } catch (error) {
     errorLogger.error(chalk.red('🤢 Failed to connect Database'));
   }

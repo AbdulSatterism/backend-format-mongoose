@@ -5,6 +5,7 @@ import router from './routes';
 import { Morgan } from './shared/morgen';
 import notFoundRoute from './app/middlewares/notFoundRoute';
 import cookieParser from 'cookie-parser';
+import { StripeWebhookController } from './app/modules/subscription/subscription.webhook';
 
 const app = express();
 
@@ -23,8 +24,9 @@ app.use(
 
 app.use(cookieParser());
 
+// Webhook MUST be BEFORE express.json() to access raw body
 app.post(
-  '/api/v1/subscriptions',
+  '/api/v1/subscriptions/webhook',
   express.raw({ type: 'application/json' }),
   StripeWebhookController.handleWebhook,
 );

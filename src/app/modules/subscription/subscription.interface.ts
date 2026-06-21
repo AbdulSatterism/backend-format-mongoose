@@ -7,9 +7,16 @@ export type SubscriptionStatus =
 export type ISubscription = {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
+  stripePriceId: string;
   status: SubscriptionStatus;
+  currentPeriodStart: Date;
   currentPeriodEnd: Date;
+  canceledAt?: Date;
+  cancelAtPeriodEnd: boolean;
   isActive: boolean;
+  lastSyncedAt: Date;
+  failedAttempts: number;
+  lastErrorMessage?: string;
 };
 
 export type ICreateCheckoutSessionPayload = {

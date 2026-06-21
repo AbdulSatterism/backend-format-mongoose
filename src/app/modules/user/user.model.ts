@@ -73,9 +73,71 @@ const userSchema = new Schema<IUser, UserModal>(
       },
       select: 0,
     },
+
+    stripe_customer_id: {
+      type: String,
+      index: true,
+    },
+
+    subscription: {
+      type: {
+        stripeCustomerId: {
+          type: String,
+          required: true,
+        },
+        stripeSubscriptionId: {
+          type: String,
+          required: true,
+        },
+        stripePriceId: {
+          type: String,
+          required: true,
+        },
+        status: {
+          type: String,
+          enum: ['active', 'inactive', 'past_due', 'canceled'],
+          default: 'inactive',
+        },
+        currentPeriodStart: {
+          type: Date,
+          default: Date.now,
+        },
+        currentPeriodEnd: {
+          type: Date,
+          required: true,
+        },
+        canceledAt: {
+          type: Date,
+        },
+        cancelAtPeriodEnd: {
+          type: Boolean,
+          default: false,
+        },
+        isActive: {
+          type: Boolean,
+          default: false,
+        },
+        lastSyncedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        failedAttempts: {
+          type: Number,
+          default: 0,
+        },
+        lastErrorMessage: {
+          type: String,
+        },
+      },
+      default: null,
+    },
   },
   { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } },
 );
+
+// Add index for subscription lookups
+userSchema.index({ 'subscription.isActive': 1 });
+userSchema.index({ 'subscription.stripeSubscriptionId': 1 });
 
 //exist user check
 userSchema.statics.isExistUserById = async (id: string) => {
@@ -102,19 +164,24 @@ userSchema.statics.isMatchPassword = async (
   return await bcrypt.compare(password, hashPassword);
 };
 
-//check user
+//check user on creation and email changes
 userSchema.pre('save', async function (next) {
-  //check user
-  const isExist = await User.findOne({ email: this.email });
-  if (isExist) {
-    throw new AppError(statusCodes.BAD_REQUEST, 'Email already used');
+  // Check email uniqueness (exclude current user if updating)
+  if (this.isModified('email')) {
+    const isExist = await User.findOne({ email: this.email });
+    if (isExist && String(isExist._id) !== String(this._id)) {
+      throw new AppError(statusCodes.BAD_REQUEST, 'Email already used');
+    }
   }
 
-  //password hash
-  this.password = await bcrypt.hash(
-    this.password,
-    Number(config.bcrypt_salt_rounds),
-  );
+  // Only hash password if it's being modified
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(
+      this.password,
+      Number(config.bcrypt_salt_rounds),
+    );
+  }
+
   next();
 });
 

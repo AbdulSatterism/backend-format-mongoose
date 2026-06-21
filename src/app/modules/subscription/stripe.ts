@@ -1,25 +1,17 @@
 import Stripe from 'stripe';
+import config from '../../../config';
+import { logger } from '../../../shared/logger';
 
-
-//TODO: this file should improve with config service and env variables, for now it is hardcoded
-
-const requireEnv = (key: string): string => {
-  const value = process.env[key];
-  if (!value) {
-    // Fail fast at startup rather than mid-request.
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value;
-};
-
-export const stripe = new Stripe(requireEnv('STRIPE_SECRET_KEY'), {
+// Initialize Stripe with config
+export const stripe = new Stripe(config.stripe.secret_key as string, {
   typescript: true,
   maxNetworkRetries: 2,
   appInfo: { name: 'subscription-service', version: '1.0.0' },
 });
 
-export const STRIPE_PRICE_ID = requireEnv('STRIPE_PRICE_ID');
-export const STRIPE_WEBHOOK_SECRET = requireEnv('STRIPE_WEBHOOK_SECRET');
+// Determine APP_URL from environment, with fallback for development
+export const APP_URL =
+  process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
 
-// Where Checkout redirects after success/cancel. Falls back if APP_URL unset.
-export const APP_URL = process.env.APP_URL || 'http://localhost:5000';
+// Log the configured URL on startup
+logger.info(`[Stripe] Configured with APP_URL: ${APP_URL}`);
