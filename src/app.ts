@@ -26,7 +26,7 @@ app.use(cookieParser());
 
 // Webhook MUST be BEFORE express.json() to access raw body
 app.post(
-  '/api/v1/subscriptions/webhook',
+  '/subscription',
   express.raw({ type: 'application/json' }),
   StripeWebhookController.handleWebhook,
 );
