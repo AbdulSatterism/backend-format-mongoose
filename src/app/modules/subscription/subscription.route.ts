@@ -1,14 +1,14 @@
-import express from 'express';
 import { USER_ROLES } from '../../../enums/user';
 import auth from '../../middlewares/auth';
 import { SubscriptionController } from './subscription.controller';
 import { manualSyncSubscriptions } from './reactive';
 import catchAsync from '../../../shared/catchAsync';
+import { Router } from 'express';
 
-const router = express.Router();
+const router = Router();
 
 router.post(
-  '/create-checkout-session',
+  '/create-intent',
   auth(USER_ROLES.USER, USER_ROLES.ADMIN),
   SubscriptionController.createCheckoutSession,
 );
@@ -39,4 +39,4 @@ router.post(
   }),
 );
 
-export const SubscriptionRoutes = router;
+export const subscriptionRoute = router;

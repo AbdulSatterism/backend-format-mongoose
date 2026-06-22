@@ -148,8 +148,11 @@ const createCheckoutSession = async (
 
   const customerId = await getOrCreateCustomer(user);
 
-  const successUrl = `${APP_URL}/api/v1/subscriptions/success`;
-  const cancelUrl = `${APP_URL}/api/v1/subscriptions/cancel`;
+  //TODO: success url and fail url
+  // const successUrl = `${APP_URL}/api/v1/subscriptions/success`;
+  // const cancelUrl = `${APP_URL}/api/v1/subscriptions/cancel`;
+  const successUrl = `https://93sbxrsw-5000.aue.devtunnels.ms/success`;
+  const cancelUrl = `https://93sbxrsw-5000.aue.devtunnels.ms/cancel`;
 
   try {
     const session = await stripe.checkout.sessions.create(
